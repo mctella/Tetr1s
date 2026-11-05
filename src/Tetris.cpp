@@ -1,6 +1,5 @@
 #include "Tetris.h"
 
-//#include <fstream>
 #include <ios>
 
 using namespace TetrisConst;
@@ -11,39 +10,29 @@ void Tetris::init(GameContext& context, Renderer& renderer){
     song = context.audio.buildFullTheme(themeData);
     context.audio.playMusic(song);
 
-    createBorderTexture(renderer);
+    uint8_t numPix;
+    uint8_t** spriteMap = context.resources.readSpriteMap("assets/blockTile.tsm", numPix);
     for(uint8_t i = 0; i < 8; i++){
-        blocktextures[i] = renderer.makeTextureFromMap8(&blockTile[0][0][0], border, &colors[i+1], BOX_SIZE, BOX_SIZE, 8);
+        blocktextures[i] = renderer.makeTextureFromMap8(/*&blockTile[0][0][0]*/spriteMap, border, &colors[i+1], BOX_SIZE, BOX_SIZE, numPix);
     }
 
     rotateSfx = context.audio.generateTone(G4, 0.5f, 0.1f);
     moveSfx = context.audio.generateTone(G4S*2, 0.3f, 0.08f);;
 
-    std::vector<Note> fixNotes = {
-        {C4 / 2.0f, 0.125f}, {G4 / 4.0f, 0.125f}
-    };
-    fixSfx = context.audio.generateSong(fixNotes, 70.0f, 0.5f);
+    SongData fData = context.resources.readSongFromFile("assets/fixSfx.trk");
+    fixSfx = context.audio.buildFullTheme(fData);
 
-    std::vector<Note> clearNotes = {
-        {G4 * 2.0f, 0.125f}, {C4 * 4.0f, 0.25f}
-    };
-    clearSfx = context.audio.generateSong(clearNotes, 70.0f, 0.5f);
+    SongData cData = context.resources.readSongFromFile("assets/cSfx.trk");
+    clearSfx = context.audio.buildFullTheme(cData);
 
-    std::vector<Note> tetrisNotes = {
-        {C4 * 2.0f, 0.125f}, {E4 * 2.0f, 0.125f}, {G4 * 2.0f, 0.125f}, {C4 * 4.0f, 0.5f}
-    };
-    tetrisSfx = context.audio.generateSong(tetrisNotes, 70.0f, 0.5f);
+    SongData tetData = context.resources.readSongFromFile("assets/tetSfx.trk");
+    tetrisSfx = context.audio.buildFullTheme(tetData);
 
-    std::vector<Note> levelupNotes = {
-        {C4 * 2.0f, 0.25f}, {G4, 0.25f}, {C4 * 2.0f, 0.25f}, {E4 * 2.0f, 0.25f}, {G4 * 2.0f, 0.5f}
-    };
-    levelupSfx = context.audio.generateSong(levelupNotes, 70.0f, 0.5f);
+    SongData lupData = context.resources.readSongFromFile("assets/lupSfx.trk");
+    levelupSfx = context.audio.buildFullTheme(lupData);
 
-    std::vector<Note> gameOverNotes = {
-        {E4 * 2.0f, 0.5f}, {B4, 0.5f}, {C4 * 2.0f, 0.5f}, {D4 * 2.0f, 0.5f},
-        {C4 * 2.0f, 0.25f}, {B4, 0.25f}, {A4, 1.0f}, {0.0f, 0.5f}
-    };
-    gameOverSfx = context.audio.generateSong(gameOverNotes, 70.0f, 0.5f);
+    SongData goData = context.resources.readSongFromFile("assets/goSfx.trk");
+    gameOverSfx = context.audio.buildFullTheme(goData);
 
     boardRect = {
         (SCREEN_WIDTH/2) - (BOX_SIZE*5),
@@ -53,8 +42,15 @@ void Tetris::init(GameContext& context, Renderer& renderer){
     };
 
     scoreRect = {
-        0,
-        0,
+        BOX_SIZE,
+        BOX_SIZE *2,
+        SCREEN_WIDTH/5,
+        64
+    };
+
+    linesRect = {
+        (SCREEN_WIDTH/5)*4,
+        BOX_SIZE *2,
         SCREEN_WIDTH/5,
         64
     };
@@ -66,11 +62,57 @@ void Tetris::init(GameContext& context, Renderer& renderer){
         SCREEN_HEIGHT
     };
 
-    isGridOn = false;
+    nextRect = {
+        borderRect.x - (BOX_SIZE*5),
+        (SCREEN_HEIGHT*0.5f) - (BOX_SIZE*2),
+        BOX_SIZE*4,
+        BOX_SIZE*4
+    };
 
-    dasTimer[0] = 0.0f;
-    dasTimer[1] = 0.0f;
-    dasTimer[2] = 0.0f;
+    nextBorderRect = {
+        nextRect.x - BOX_SIZE,
+        nextRect.y - BOX_SIZE,
+        BOX_SIZE*6,
+        BOX_SIZE*6
+    };
+
+    holdRect = {
+        borderRect.x + borderRect.width + BOX_SIZE,
+        (SCREEN_HEIGHT*0.5f) - (BOX_SIZE*2),
+        BOX_SIZE*4,
+        BOX_SIZE*4
+    };
+    holdBorderRect = {
+        holdRect.x - BOX_SIZE,
+        holdRect.y - BOX_SIZE,
+        BOX_SIZE*6,
+        BOX_SIZE*6
+    };
+
+    createBorderTexture(renderer);
+
+    Font promptFont("assets/pong_font.ttf", 28);
+    nextWrite = promptFont.createTextTexture(renderer, "NEXT", ColorCodes::WHITE);
+    holdWrite = promptFont.createTextTexture(renderer, "HOLD", ColorCodes::WHITE);
+
+    scoreTex = promptFont.createTextTexture(renderer, "SCORE", ColorCodes::WHITE);
+    lvlTex = promptFont.createTextTexture(renderer, "LEVEL", ColorCodes::WHITE);
+
+    nextTextRect = {
+        nextBorderRect.x,
+        nextBorderRect.y - BOX_SIZE,
+        nextBorderRect.width,
+        BOX_SIZE
+    };
+
+    holdTextRect = {
+        holdBorderRect.x,
+        holdBorderRect.y - BOX_SIZE,
+        holdBorderRect.width,
+        BOX_SIZE
+    };
+
+    isGridOn = false;
 
     level = 0;
     score = 0;
@@ -98,43 +140,28 @@ void Tetris::update(float deltaTime, GameContext& context){
                 rotateSRS(false, context.audio);
             }
             if(context.input.wasKeyPressed(Key::W)){
-                while(!checkCollision()){
+                while(!checkCollision(r)){
                     r++;
                 }
                 r--;
                 fix(context.audio);
             }
-            if(context.input.wasKeyPressed(Key::E)){
+            if(context.input.wasKeyDAS(Key::E, DAS_DELAY, RAPID_REPEAT)){
                 rotateSRS(true, context.audio);
             }
-            if(context.input.wasKeyPressed(Key::D)){
-                moveRight(DAS_DELAY, context.audio);
-            }else if(context.input.isKeyDown(Key::D)){
-                dasTimer[2] -= deltaTime;
-                if(dasTimer[2] <= 0.0f){
-                    moveRight(RAPID_REPEAT, context.audio);
-                }
+            if(context.input.wasKeyDAS(Key::D, DAS_DELAY, RAPID_REPEAT)){
+                moveRight(context.audio);
             }
-            if(context.input.wasKeyPressed(Key::S)){
-                moveDown(DAS_DELAY, context.audio);
+            if(context.input.wasKeyDAS(Key::S, DAS_DELAY, RAPID_REPEAT)){
+                moveDown(context.audio);
                 gravityTimer = currGravitySpeed;
-            }else if(context.input.isKeyDown(Key::S)){
-                dasTimer[1] -= deltaTime;
-                if(dasTimer[1] <= 0.0f){
-                    moveDown(RAPID_REPEAT, context.audio);
-                    gravityTimer = currGravitySpeed;
-                }
             }
-            if(context.input.wasKeyPressed(Key::A)){
-                moveLeft(DAS_DELAY, context.audio);
-            }else if(context.input.isKeyDown(Key::A)){
-                dasTimer[0] -= deltaTime;
-                if(dasTimer[0] <= 0.0f){
-                    moveLeft(RAPID_REPEAT, context.audio);
-                }
+            if(context.input.wasKeyDAS(Key::A, DAS_DELAY, RAPID_REPEAT)){
+                moveLeft(context.audio);
             }
             if(context.input.wasKeyPressed(Key::G)){
-                isGridOn = (isGridOn) ? false : true;
+                //isGridOn = (isGridOn) ? false : true;
+                swapPiece(context.audio);
             }
             if(context.input.wasKeyPressed(Key::Left)){
                 rotateSRS(false, context.audio);
@@ -145,7 +172,7 @@ void Tetris::update(float deltaTime, GameContext& context){
 
             gravityTimer -= deltaTime;
             if(gravityTimer <= 0.0f){
-                moveDown(0.0f, context.audio);
+                moveDown(context.audio);
                 gravityTimer = currGravitySpeed;
             }
             break;
@@ -164,6 +191,16 @@ void Tetris::update(float deltaTime, GameContext& context){
                 }
             }
             break;
+        case TetrisState::Flashing:
+            flashTimer -= deltaTime;
+            if(flashTimer <= 0.0f){
+                for(uint8_t line : flashingLines){
+                    deleteLine(line, context.audio);
+                }
+                currentState = TetrisState::Playing;
+                newPiece(context.audio);
+            }
+            break;
     }
     if(context.input.wasKeyPressed(Key::P)){
         context.scenes.pushScene(std::make_unique<PauseScene>());
@@ -179,36 +216,59 @@ void Tetris::render(Renderer& renderer){
 
     renderer.setColor(ColorCodes::WHITE);
     renderer.drawScore(scoreRect, score, 6);
+    renderer.drawScore(linesRect, level, 6);
+
+    renderPiece(renderer, centerPiece(nextRect, nextPieceType), blocktextures[nextPieceType], nextPiece);
+    if(holding){
+        renderPiece(renderer, centerPiece(holdRect, holdPieceType), blocktextures[holdPieceType], holdPiece);
+    }
+
+    renderer.drawTexture(nextTexture[level % 3], nextBorderRect);
+    renderer.drawTexture(nextWrite, nextTextRect);
+
+    renderer.drawTexture(nextTexture[level % 3], holdBorderRect);
+    renderer.drawTexture(holdWrite, holdTextRect);
 
     renderer.drawTexture(borderTexture[level % 3], borderRect);
     renderBoard(renderer);
+
     renderCurrPiece(renderer, blocktextures[pieceType]);
+
+    renderer.drawTexture(scoreTex, {scoreRect.x, 0, scoreRect.width, BOX_SIZE});
+    renderer.drawTexture(lvlTex, {linesRect.x, 0, linesRect.width, BOX_SIZE});
+
+    if(currentState == TetrisState::Flashing){
+        Color color = (flashTimer < 0.1f || flashTimer > 0.2f) ? ColorCodes::WHITE : ColorCodes::BLACK;
+        renderer.setColor(color);
+        for(uint8_t line : flashingLines){
+            renderer.drawRect({boardRect.x, boardRect.y + (BOX_SIZE*((line)-1)), boardRect.width, BOX_SIZE}, true);
+        }
+    }else{
+        renderOutline(renderer, currPiece);
+    }
 }
 
-void Tetris::moveRight(float timer, AudioSystem& audio){
-    dasTimer[2] = timer;
+void Tetris::moveRight(AudioSystem& audio){
     c++;
-    if(checkCollision()){
+    if(checkCollision(r)){
         c--;
         return;
     }
     audio.playSfx(moveSfx);
 }
 
-void Tetris::moveLeft(float timer, AudioSystem& audio){
-    dasTimer[0] = timer;
+void Tetris::moveLeft(AudioSystem& audio){
     c--;
-    if(checkCollision()){
+    if(checkCollision(r)){
         c++;
         return;
     }
     audio.playSfx(moveSfx);
 }
 
-void Tetris::moveDown(float timer, AudioSystem& audio){
-    dasTimer[1] = timer;
+void Tetris::moveDown(AudioSystem& audio){
     r++;
-    if(checkCollision()){
+    if(checkCollision(r)){
         r--;
         fix(audio);
     }
@@ -217,6 +277,8 @@ void Tetris::moveDown(float timer, AudioSystem& audio){
 void Tetris::setPiece(){
     pieceType = (pieceType % 7);
     currPiece = TETROMINOES[pieceType][currRot];
+    nextPieceType = (nextPieceType % 7);
+    nextPiece = TETROMINOES[nextPieceType][0];
 }
 
 void Tetris::rotateSRS(bool clockwise, AudioSystem& audio){
@@ -228,7 +290,7 @@ void Tetris::rotateSRS(bool clockwise, AudioSystem& audio){
     if(pieceType == 3){
         currRot = nextRot;
         setPiece();
-        if(checkCollision()){
+        if(checkCollision(r)){
             currRot = clockwise ? (nextRot - 1 + 4) % 4 : (nextRot + 1) % 4;
             setPiece();
             audio.playSfx(rotateSfx);
@@ -254,7 +316,7 @@ void Tetris::rotateSRS(bool clockwise, AudioSystem& audio){
         currRot = nextRot;
         setPiece();
 
-        if(!checkCollision()){
+        if(!checkCollision(r)){
             audio.playSfx(rotateSfx);
             return;
         }
@@ -295,32 +357,85 @@ void Tetris::createBorderTexture(Renderer& renderer){
         renderer.drawRect({PADDING - nb, PADDING - nb, BOX_SIZE*10 + nb*2, nb}, true);                        // TOP
         renderer.drawRect({w - nb, 0, nb, SCREEN_HEIGHT}, true);  // RIGHT
         renderer.drawRect({0, SCREEN_HEIGHT - nb, w, nb}, true);    // BOTTOM
+
+        renderer.setRenderTarget(nullptr);
+        nextTexture[i] = renderer.createRenderTarget(nextBorderRect.width, nextBorderRect.height);
+        renderer.setRenderTarget(&nextTexture[i]);
+
+        renderer.setColor(0, 0, 0, 0);
+        renderer.clear();
+
+        renderer.setColor(cols[i]);
+        renderer.drawRect({0, 0, BOX_SIZE, nextBorderRect.height}, true);            // LEFT
+        renderer.drawRect({0, 0, nextBorderRect.width, BOX_SIZE}, true);                        // TOP
+        renderer.drawRect({BOX_SIZE*5, 0, BOX_SIZE, nextBorderRect.height}, true);  // RIGHT
+        renderer.drawRect({0, BOX_SIZE*5, nextBorderRect.width, BOX_SIZE}, true);    // BOTTOM
+
+        renderer.setColor(calculateHighlight(cols[i]));
+        renderer.drawRect({0, 0, nb, nextBorderRect.height}, true);            // LEFT
+        renderer.drawRect({0, 0, nextBorderRect.width, nb}, true);                        // TOP
+        renderer.drawRect({BOX_SIZE*5, BOX_SIZE, nb, nextBorderRect.height - BOX_SIZE*2 + nb}, true);  // RIGHT
+        renderer.drawRect({BOX_SIZE - nb, BOX_SIZE*5, BOX_SIZE*4 + nb*2, nb}, true);    // BOTTOM
+
+        renderer.setColor(calculateShadow(cols[i]));
+        renderer.drawRect({BOX_SIZE - nb, BOX_SIZE, nb, nextBorderRect.height - BOX_SIZE*2}, true);            // LEFT
+        renderer.drawRect({BOX_SIZE - nb, BOX_SIZE - nb, BOX_SIZE*4 + nb*2, nb}, true);                        // TOP
+        renderer.drawRect({nextBorderRect.width - nb, 0, nb, nextBorderRect.height}, true);  // RIGHT
+        renderer.drawRect({0, nextBorderRect.height - nb, nextBorderRect.width, nb}, true);    // BOTTOM
     }
 
     renderer.setRenderTarget(nullptr);
 }
 
-void Tetris::renderCurrPiece(Renderer& renderer, Texture& blockTex){
-    int startX = boardRect.x + (BOX_SIZE*(c-1));
-    int startY = boardRect.y + (BOX_SIZE*(r-1));
-
-    uint16_t p = currPiece;
-
-    for(int pos = 0; p > 0; pos++, p <<=1){
-        if(p & 0x8000){
+void Tetris::renderPiece(Renderer& renderer, const Rect& dest, Texture& blocktTex, uint16_t piece){
+    for(int pos = 0; piece > 0; pos++, piece <<=1){
+        if(piece & 0x8000){
             int x = pos%4;
             int y = pos/4;
 
-            Rect dest = {
+            Rect newDest = {
+                static_cast<float>(dest.x + (x*BOX_SIZE)),
+                static_cast<float>(dest.y + (y*BOX_SIZE)),
+                BOX_SIZE,
+                BOX_SIZE
+            };
+
+            renderer.drawTexture(blocktTex, newDest);
+        }
+    }
+}
+
+void Tetris::renderOutline(Renderer& renderer, uint16_t piece){
+    int8_t dummyR = r;
+    while( !checkCollision(dummyR) ) dummyR++;
+    dummyR--;
+
+    float startX = boardRect.x + (BOX_SIZE*(c-1));
+    float startY = boardRect.y + (BOX_SIZE*(dummyR-1));
+
+    for(int pos = 0; piece > 0; pos++, piece <<=1){
+        if(piece & 0x8000){
+            int x = pos%4;
+            int y = pos/4;
+
+            Rect newDest = {
                 static_cast<float>(startX + (x*BOX_SIZE)),
                 static_cast<float>(startY + (y*BOX_SIZE)),
                 BOX_SIZE,
                 BOX_SIZE
             };
 
-            renderer.drawTexture(blockTex, dest);
+            renderer.setColor(colors[pieceType+1]);
+            renderer.drawRect(newDest, false);
         }
     }
+}
+
+void Tetris::renderCurrPiece(Renderer& renderer, Texture& blockTex){
+    float startX = boardRect.x + (BOX_SIZE*(c-1));
+    float startY = boardRect.y + (BOX_SIZE*(r-1));
+
+    renderPiece(renderer, {startX, startY, BOX_SIZE*4, BOX_SIZE*4}, blockTex, currPiece);
 }
 
 void Tetris::renderBoard(Renderer& renderer){
@@ -340,11 +455,11 @@ void Tetris::renderBoard(Renderer& renderer){
     }
 }
 
-bool Tetris::checkCollision() const{
+bool Tetris::checkCollision(int8_t destRow) const{
     for(int row = 0; row < 4; row++){
         for(int col = 0; col < 4; col++){
             if((currPiece >> (15 - ((row*4)+col))) & 1){
-                int8_t checkRow = r + row;
+                int8_t checkRow = destRow + row;
                 int8_t checkCol = c + col;
 
                 if(checkRow < 0 || checkRow >= BOARD_HEIGHT ||
@@ -352,7 +467,7 @@ bool Tetris::checkCollision() const{
                     return true;
                 }
 
-                if(board[r + row][c + col]) return true;
+                if(board[destRow + row][c + col]) return true;
             }
         }
     }
@@ -373,28 +488,31 @@ void Tetris::fix(AudioSystem& audio){
             }
         }
     }
-    uint8_t deletedCOunt = 0;
+    //uint8_t deletedCOunt = 0;
+    flashingLines.clear();
     for(uint8_t row = 0; row < 4; row++){
         uint8_t boardRow = r + row;
         if(boardRow >= BOARD_HEIGHT - 1) continue;
         if(checkLine(boardRow)){
-            deleteLine(boardRow, audio);
-            deletedCOunt++;
+            //deleteLine(boardRow, audio);
+            flashingLines.push_back(boardRow);
+            //deletedCOunt++;
         }
     }
 
-    if(deletedCOunt){
-        increaseScore(deletedCOunt);
-        if(deletedCOunt == 4){
+    if(!flashingLines.empty()){
+        increaseScore(flashingLines.size());
+        currentState = TetrisState::Flashing;
+        flashTimer = FLASH_TIMER;
+        if(flashingLines.size() == 4){
             audio.playSfx(tetrisSfx);
         }else{
             audio.playSfx(clearSfx);
         }
     }else{
         audio.playSfx(fixSfx);
+        newPiece(audio);
     }
-
-    newPiece(audio);
 }
 
 bool Tetris::checkLine(uint8_t line) const{
@@ -418,7 +536,6 @@ void Tetris::deleteLine(uint8_t line, AudioSystem& audio){
 
 void Tetris::newPiece(AudioSystem& audio){
     spawnDelayTimer = SPAWN_DELAY;
-    dasTimer[1] = DAS_DELAY;
 
     pieceType = nextPieceType;
 
@@ -434,10 +551,43 @@ void Tetris::newPiece(AudioSystem& audio){
     currRot = 0;
     setPiece();
 
-    if(checkCollision()){
+    if(checkCollision(r)){
         currentState = TetrisState::GameOverAnim;
         audio.stopMusic();
         audio.playSfx(gameOverSfx);
+    }
+
+    if(justSwapped) justSwapped = false;
+}
+
+void Tetris::swapPiece(AudioSystem& audio){
+    if(!holding){
+        holdPieceType = pieceType;
+        holdPiece = TETROMINOES[holdPieceType][0];
+        justSwapped = true;
+        holding = true;
+        newPiece(audio);
+        return;
+    }
+
+    if(!justSwapped){
+        r = 1;
+        c = 4;
+        currRot = 0;
+
+        uint8_t tempPieceType = holdPieceType;
+        uint16_t tempPiece = TETROMINOES[tempPieceType][0];
+
+        holdPieceType = pieceType;
+        holdPiece = TETROMINOES[pieceType][0];
+
+        pieceType = tempPieceType;
+        currPiece = tempPiece;
+
+        spawnDelayTimer = SPAWN_DELAY;
+
+        justSwapped = true;
+        holding = true;
     }
 }
 
@@ -455,7 +605,7 @@ void Tetris::setDropSpeedMS(){
 }
 
 void Tetris::increaseScore(uint8_t lines){
-    score += (POINTS[lines+1]) * (level+1);
+    score += (POINTS[lines-1]) * (level+1);
 }
 
 void Tetris::levelUp(AudioSystem& audio){
@@ -474,3 +624,27 @@ void Tetris::fillBag(){
     bagIndex = 0;
 }
 
+Rect Tetris::centerPiece(Rect pieceRect, uint8_t type){
+    Rect newDest = {
+        pieceRect.x,
+        pieceRect.y,
+        pieceRect.width,
+        pieceRect.height
+    };
+
+    if( type == 0 /*I*/ ){
+        newDest.y += (BOX_SIZE*0.5f);
+    }else if( type == 1 /*J*/ ){
+        newDest.x += BOX_SIZE;
+        newDest.y += (BOX_SIZE*0.5f);
+    }else if( type == 2 /*L*/ ){
+        newDest.y += (BOX_SIZE*0.5f);
+    }else if( type == 3 /*O*/){
+        newDest.x += BOX_SIZE;
+        newDest.y += BOX_SIZE;
+    }else if( type == 4 /*S*/ || type == 6 /*Z*/ || type == 5 /*T*/ ){
+        newDest.x += (BOX_SIZE*0.5f);
+    }
+
+    return newDest;
+}

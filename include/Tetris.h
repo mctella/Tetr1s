@@ -157,11 +157,14 @@ namespace TetrisConst{
 
     inline constexpr float PAUSE_W = TITLE_W / 4;
     inline constexpr float PAUSE_H = TITLE_H / 4;
+
+    inline constexpr float FLASH_TIMER = 0.3f;
 };
 
 enum class TetrisState {
     Playing,
-    GameOverAnim
+    GameOverAnim,
+    Flashing
 };
 
 class Tetris : public Game
@@ -173,23 +176,28 @@ class Tetris : public Game
 
         void render(Renderer& renderer) override;
 
-        void moveRight(float timer, AudioSystem& audio);
-        void moveLeft(float timer, AudioSystem& audio);
-        void moveDown(float timer, AudioSystem& audio);
+        void moveRight(AudioSystem& audio);
+        void moveLeft(AudioSystem& audio);
+        void moveDown(AudioSystem& audio);
 
         void setPiece();
+        void swapPiece(AudioSystem& audio);
 
         void rotateSRS(bool clockwise, AudioSystem& audio);
 
+        void renderPiece(Renderer& renderer, const Rect& dest, Texture& blocktTex, uint16_t piece);
         void renderCurrPiece(Renderer& renderer, Texture& blockTex);
+        void renderOutline(Renderer& renderer, uint16_t piece);
         void renderBoard(Renderer& renderer);
 
-        bool checkCollision() const;
+        bool checkCollision(int8_t destRow) const;
         void fix(AudioSystem& audio);
         void newPiece(AudioSystem& audio);
 
         bool checkLine(uint8_t line) const;
+
         void deleteLine(uint8_t line, AudioSystem& audio);
+        void flashLines(uint8_t line, uint8_t num);
 
         void setDropSpeedMS();
 
@@ -199,18 +207,27 @@ class Tetris : public Game
 
         void fillBag();
 
+        Rect centerPiece(Rect pieceRect, uint8_t type);
+
         Texture createBlockTexture(Renderer& renderer, uint8_t rot);
         void createBorderTexture(Renderer& renderer);
     private:
         uint16_t currPiece;
-        uint16_t nextPiece;
         uint8_t pieceType;
+
+        uint16_t nextPiece;
         uint8_t nextPieceType;
+
+        uint16_t holdPiece;
+        uint8_t holdPieceType;
+
+        bool holding = false;
+        bool justSwapped = false;
+
         int8_t r;
         int8_t c;
         uint8_t currRot;
 
-        float dasTimer[3];
         float currGravitySpeed;
         float gravityTimer;
 
@@ -248,7 +265,22 @@ class Tetris : public Game
 
         Rect boardRect;
         Rect scoreRect;
+        Rect linesRect;
         Rect borderRect;
+
+        Texture scoreTex;
+        Texture lvlTex;
+
+        Rect nextRect;
+        Rect nextBorderRect;
+        Texture nextTexture[3];
+        Texture nextWrite;
+        Rect nextTextRect;
+
+        Rect holdRect;
+        Rect holdBorderRect;
+        Texture holdWrite;
+        Rect holdTextRect;
 
         std::array<uint8_t, 7> bag;
         uint8_t bagIndex = 7;
@@ -267,11 +299,15 @@ class Tetris : public Game
 
         bool isGridOn;
 
-        //void bakeTetrisSongToFile();
-
         TetrisState currentState = TetrisState::Playing;
         int animRow = TetrisConst::BOARD_HEIGHT - 2;
         float animTimer = 0.0f;
+
+        uint8_t flashRow;
+        uint8_t numFlashing = 0;
+        float flashTimer = 0.0f;
+
+        std::vector<uint8_t> flashingLines;
 };
 
 #endif // TETRIS_H
