@@ -89,6 +89,8 @@ void Tetris::init(GameContext& context, Renderer& renderer){
         BOX_SIZE*6
     };
 
+    lockTimer = 0;
+
     createBorderTexture(renderer);
 
     Font promptFont("assets/pong_font.ttf", 28);
@@ -114,6 +116,7 @@ void Tetris::init(GameContext& context, Renderer& renderer){
 
     isGridOn = false;
 
+    /*!!!*/
     level = 0;
     score = 0;
     lines = LINES;
@@ -170,10 +173,16 @@ void Tetris::update(float deltaTime, GameContext& context){
                 rotateSRS(true, context.audio);
             }
 
-            gravityTimer -= deltaTime;
-            if(gravityTimer <= 0.0f){
-                moveDown(context.audio);
-                gravityTimer = currGravitySpeed;
+            if(isDown && lockTimer <= 0.0f){
+                fix(context.audio);
+            }else if(lockTimer > 0.0f){
+                lockTimer -= deltaTime;
+            }else{
+                gravityTimer -= deltaTime;
+                if(gravityTimer <= 0.0f){
+                    moveDown(context.audio);
+                    gravityTimer = currGravitySpeed;
+                }
             }
             break;
         case TetrisState::GameOverAnim:
@@ -215,8 +224,8 @@ void Tetris::render(Renderer& renderer){
     renderer.clear();
 
     renderer.setColor(ColorCodes::WHITE);
-    renderer.drawScore(scoreRect, score, 6);
-    renderer.drawScore(linesRect, level, 6);
+    renderer.drawScore(scoreRect, score, 7);
+    renderer.drawScore(linesRect, level, 3);
 
     renderPiece(renderer, centerPiece(nextRect, nextPieceType), blocktextures[nextPieceType], nextPiece);
     if(holding){
@@ -232,8 +241,6 @@ void Tetris::render(Renderer& renderer){
     renderer.drawTexture(borderTexture[level % 3], borderRect);
     renderBoard(renderer);
 
-    renderCurrPiece(renderer, blocktextures[pieceType]);
-
     renderer.drawTexture(scoreTex, {scoreRect.x, 0, scoreRect.width, BOX_SIZE});
     renderer.drawTexture(lvlTex, {linesRect.x, 0, linesRect.width, BOX_SIZE});
 
@@ -243,8 +250,9 @@ void Tetris::render(Renderer& renderer){
         for(uint8_t line : flashingLines){
             renderer.drawRect({boardRect.x, boardRect.y + (BOX_SIZE*((line)-1)), boardRect.width, BOX_SIZE}, true);
         }
-    }else{
+    }else if(currentState != TetrisState::GameOverAnim){
         renderOutline(renderer, currPiece);
+        renderCurrPiece(renderer, blocktextures[pieceType]);
     }
 }
 
@@ -255,6 +263,12 @@ void Tetris::moveRight(AudioSystem& audio){
         return;
     }
     audio.playSfx(moveSfx);
+
+    lockTimer = LOCK_DELAY;
+    if(!checkCollision(r+1)){
+        isDown = false;
+        lockTimer = 0.0f;
+    }
 }
 
 void Tetris::moveLeft(AudioSystem& audio){
@@ -264,13 +278,23 @@ void Tetris::moveLeft(AudioSystem& audio){
         return;
     }
     audio.playSfx(moveSfx);
+
+    lockTimer = LOCK_DELAY;
+
+    // Check if the piece fell off a ledge
+    if(!checkCollision(r + 1)){
+        isDown = false;
+        lockTimer = 0.0f;
+    }
 }
 
 void Tetris::moveDown(AudioSystem& audio){
     r++;
     if(checkCollision(r)){
         r--;
-        fix(audio);
+        lockTimer = LOCK_DELAY;
+        isDown = true;
+        //fix(audio);
     }
 }
 
@@ -294,6 +318,12 @@ void Tetris::rotateSRS(bool clockwise, AudioSystem& audio){
             currRot = clockwise ? (nextRot - 1 + 4) % 4 : (nextRot + 1) % 4;
             setPiece();
             audio.playSfx(rotateSfx);
+        }else{
+            lockTimer = LOCK_DELAY;
+            if(!checkCollision(r + 1)){
+                isDown = false;
+                lockTimer = 0.0f;
+            }
         }
         return;
     }
@@ -318,6 +348,13 @@ void Tetris::rotateSRS(bool clockwise, AudioSystem& audio){
 
         if(!checkCollision(r)){
             audio.playSfx(rotateSfx);
+
+            lockTimer = LOCK_DELAY;
+
+            if(!checkCollision(r + 1)){
+                isDown = false;
+                lockTimer = 0.0f;
+            }
             return;
         }
 
@@ -467,7 +504,7 @@ bool Tetris::checkCollision(int8_t destRow) const{
                     return true;
                 }
 
-                if(board[destRow + row][c + col]) return true;
+                if(board[checkRow][checkCol]) return true;
             }
         }
     }
@@ -551,6 +588,8 @@ void Tetris::newPiece(AudioSystem& audio){
     currRot = 0;
     setPiece();
 
+    isDown = false;
+
     if(checkCollision(r)){
         currentState = TetrisState::GameOverAnim;
         audio.stopMusic();
@@ -588,6 +627,13 @@ void Tetris::swapPiece(AudioSystem& audio){
 
         justSwapped = true;
         holding = true;
+
+        isDown = false;
+        if(checkCollision(r)){
+            currentState = TetrisState::GameOverAnim;
+            audio.stopMusic();
+            audio.playSfx(gameOverSfx);
+        }
     }
 }
 

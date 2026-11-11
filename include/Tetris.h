@@ -94,9 +94,10 @@ namespace TetrisConst{
     constexpr uint8_t BOARD_HEIGHT = 22;
     constexpr uint8_t BOARD_WIDTH = 12;
 
-    inline constexpr float DAS_DELAY = 0.15f;
-    inline constexpr float RAPID_REPEAT = 0.03f;
+    inline constexpr float DAS_DELAY = 0.10f;
+    inline constexpr float RAPID_REPEAT = 0.05f;
 
+    inline constexpr float LOCK_DELAY = 0.5f;
     inline constexpr float SPAWN_DELAY = 0.2f;
 
     inline constexpr uint8_t LINES = 10;
@@ -230,7 +231,7 @@ class Tetris : public Game
 
         float currGravitySpeed;
         float gravityTimer;
-
+        float lockTimer;
         float spawnDelayTimer;
 
         uint8_t level;
@@ -298,6 +299,8 @@ class Tetris : public Game
         Texture borderTexture[3];
 
         bool isGridOn;
+
+        bool isDown = false;
 
         TetrisState currentState = TetrisState::Playing;
         int animRow = TetrisConst::BOARD_HEIGHT - 2;
